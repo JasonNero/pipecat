@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD 2-Clause License
 #
 
+import itertools
 from typing import AsyncGenerator, Dict, Optional
 
 from loguru import logger
@@ -207,17 +208,35 @@ class DeepgramSTTService(STTService):
             language = Language(language)
         if len(transcript) > 0:
             await self.stop_ttfb_metrics()
-            if is_final:
+            FrameClass = InterimTranscriptionFrame if not is_final else TranscriptionFrame
+            if not self._settings.get("diarize"):
                 await self.push_frame(
-                    TranscriptionFrame(transcript, "", time_now_iso8601(), language)
+                    FrameClass(transcript, "", time_now_iso8601(), language)
                 )
+            else:
+                spoken_words = [
+                    [word.speaker, word.punctuated_word]
+                    for word in result.channel.alternatives[0].words
+                ]
+                speaker_transcripts = [
+                    (speaker, " ".join(word[1] for word in group))
+                    for speaker, group in itertools.groupby(spoken_words, key=lambda x: x[0])
+                ]
+                for speaker, transcript in speaker_transcripts:
+                    await self.push_frame(
+                        FrameClass(
+                            transcript,
+                            f"Speaker {speaker}",
+                            time_now_iso8601(),
+                            language,
+                        )
+                    )
+
+            if is_final:
+                # For interim transcriptions, just push the frame without tracing
                 await self._handle_transcription(transcript, is_final, language)
                 await self.stop_processing_metrics()
-            else:
-                # For interim transcriptions, just push the frame without tracing
-                await self.push_frame(
-                    InterimTranscriptionFrame(transcript, "", time_now_iso8601(), language)
-                )
+
 
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
