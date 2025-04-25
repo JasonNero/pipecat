@@ -367,13 +367,14 @@ class LLMUserContextAggregator(LLMContextResponseAggregator):
         self._bot_speaking = False
 
     async def _handle_transcription(self, frame: TranscriptionFrame):
-        text = frame.text
-
         # Make sure we really have some text.
-        if not text.strip():
+        if not frame.text.strip():
             return
 
-        self._aggregation += f" {text}" if self._aggregation else text
+        if self._aggregation:
+            self._aggregation += f" {frame.user_id}: {frame.text}"
+        else:
+            self._aggregation = f"{frame.user_id}: {frame.text}"
         # We just got a final result, so let's reset interim results.
         self._seen_interim_results = False
         # Reset aggregation timer.
