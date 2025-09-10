@@ -308,7 +308,7 @@ class DeepgramSTTService(STTService):
                     await self.push_frame(
                         FrameClass(
                             transcript,
-                            f"{speaker=} {self._user_id=}",
+                            f"{self._user_id}-{speaker}" if self._user_id else speaker,
                             time_now_iso8601(),
                             language,
                             result=result,
